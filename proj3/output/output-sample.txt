@@ -1,0 +1,16 @@
+disk initialized
+foo created
+foo opened 1
+60 bytes written
+10 bytes written
+position is 55
+xxxxxyyyyy
+foo
+disk saved
+
+disk restored
+foo opened 1
+xxx
+error
+1 closed
+foo
