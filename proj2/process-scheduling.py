@@ -22,9 +22,8 @@ def main():
 def print_real_times(real_times):
   real_times.sort(key=lambda x:x[0])
   real_times = [x[1] for x in real_times]
-  average = '%.2f' % round(float(sum(real_times))/len(real_times)-0.005, 2)
-  lol =  average
-  print '{0} {1}'.format(average, ' '.join([str(f) for f in real_times]))
+  average = float(int(float(sum(real_times))/len(real_times) * 100))/100
+  print '{0:.2f} {1}'.format(average, ' '.join([str(f) for f in real_times]))
 
 def fifo(processes):
   real_times = []
@@ -82,7 +81,6 @@ def srt(processes):
 import time
 
 def mlf(processes):
-  lol = {}
   N = 5
   T = 1
   real_times = []
@@ -90,7 +88,6 @@ def mlf(processes):
   for process in processes:
     process['waiting_time'] = 0
     process['remaining_time'] = process['service_time']
-    lol[process['process_id']] = process
 
   priority_levels = []
   for i in range(N):
