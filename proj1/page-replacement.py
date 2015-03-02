@@ -1,6 +1,6 @@
 #!/bin/python
 
-SIZE = 4
+SIZE = 16
 
 def main():
   rs = [int(p) for p in raw_input().split(' ')]
