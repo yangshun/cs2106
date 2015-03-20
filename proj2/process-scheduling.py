@@ -4,7 +4,7 @@ from math import *
 from copy import *
 
 def main():
-  input_str = [int(p) for p in raw_input().split(' ')]
+  input_str = [int(p.strip()) for p in raw_input().split(' ') if p != '']
   processes = []
   for i in range(len(input_str)//2):
     process = { 'process_id': i, 
@@ -30,6 +30,7 @@ def fifo(processes):
   current_time = 0
   while len(processes) > 0:
     # Update priority of all processes
+    current_time = max(min([process['arrival_time'] for process in processes]), current_time)
     for process in processes:
       process['priority'] = current_time - process['arrival_time']
     processes.sort(key=lambda x:x['priority'], reverse=True)
@@ -44,6 +45,7 @@ def sjf(processes):
   current_time = 0
   while len(processes) > 0:
     # Update priority of all processes
+    current_time = max(min([process['arrival_time'] for process in processes]), current_time)
     available_processes = [p for p in processes if p['arrival_time'] <= current_time]
     for process in available_processes:
       process['priority'] = process['service_time']
@@ -68,13 +70,13 @@ def srt(processes):
       process['priority'] = -process['remaining_time']
       process['waiting_time'] += 1
     available_processes.sort(key=lambda x:x['priority'], reverse=True)
-
-    current_process = available_processes[0]
-    current_process['waiting_time'] -= 1
-    current_process['remaining_time'] -= 1
-    if (current_process['remaining_time'] == 0):
-      real_times.append((current_process['process_id'], current_process['waiting_time'] + current_process['service_time']))
-      processes = [p for p in processes if p['process_id'] != current_process['process_id']]
+    if (len(available_processes) > 0):
+      current_process = available_processes[0]
+      current_process['waiting_time'] -= 1
+      current_process['remaining_time'] -= 1
+      if (current_process['remaining_time'] == 0):
+        real_times.append((current_process['process_id'], current_process['waiting_time'] + current_process['service_time']))
+        processes = [p for p in processes if p['process_id'] != current_process['process_id']]
     current_time += 1
   print_real_times(real_times)
 
@@ -106,6 +108,7 @@ def mlf(processes):
       for i in range(N):
         if len(priority_levels[i]) > 0:
           return i, priority_levels[i][0]
+    return -1, None
 
   def update_waiting_time(priority_levels):
     for i in range(N):
@@ -114,27 +117,32 @@ def mlf(processes):
 
   while True:
     new_processes_at_current_time = [p for p in processes if p['arrival_time'] == current_time]
-    for process in new_processes_at_current_time:
-      process['time_received'] = 0
-      priority_levels[0].append(process)
-    level, current_process = top_process(priority_levels)
-    current_process['time_received'] += 1
-    current_process['remaining_time'] -= 1
 
-    if current_process['remaining_time'] == 0:
-      priority_levels[level].pop(0) # Pop current process
-      real_times.append((current_process['process_id'], current_process['waiting_time'] + current_process['service_time']))
-    elif current_process['time_received'] == 2 ** level * T:
-      priority_levels[level].pop(0) # Pop current process
-      current_process['time_received'] = 0
-      priority_levels[level+1].append(current_process)
-    update_waiting_time(priority_levels)
-    current_process['waiting_time'] -= 1
+    if (len(new_processes_at_current_time) > 0):
+      for process in new_processes_at_current_time:
+        process['time_received'] = 0
+        priority_levels[0].append(process)
+    
+    level, current_process = top_process(priority_levels)
+    if level > -1:
+      current_process['time_received'] += 1
+      current_process['remaining_time'] -= 1
+
+      if current_process['remaining_time'] == 0:
+        priority_levels[level].pop(0) # Pop current process
+        real_times.append((current_process['process_id'], current_process['waiting_time'] + current_process['service_time']))
+      elif current_process['time_received'] == 2 ** level * T:
+        priority_levels[level].pop(0) # Pop current process
+        current_process['time_received'] = 0
+        priority_levels[level+1].append(current_process)
+      update_waiting_time(priority_levels)
+      current_process['waiting_time'] -= 1
     
     processes = [p for p in processes if p['arrival_time'] != current_time]
     
     current_time += 1
-    if processes_remaining(priority_levels) == 0:
+    # print processes_remaining(priority_levels), len(processes)
+    if processes_remaining(priority_levels) == 0 and len(processes) == 0:
       break
     
   print_real_times(real_times)
