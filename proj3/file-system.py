@@ -88,6 +88,12 @@ class FileSystem(object):
         return i
     return -1
 
+  def get_OFT_free_entry(self):
+    for i in range(3):
+      if i not in self.OFT:
+        return i
+    raise FSError('No more free entries in OFT!')
+
   def create_file(self, name):
     fd_index = self.retrieve_file(name)
     if fd_index > 0:
@@ -119,6 +125,7 @@ class FileSystem(object):
             break
         if free_directory_found:
           break
+
       return name + ' created'
 
   # def destroy_file(name):
@@ -129,6 +136,7 @@ class FileSystem(object):
   #     raise FSError('File <' + name + '> does not exist!')
 
   # def open_file(name):
+  #   self.OFT[self.get_OFT_free_entry()] = (descriptor_index, 0)
   #   if name in files:
   #     files.remove(name)
   #     return name + ' destroyed'
@@ -140,6 +148,7 @@ class FileSystem(object):
       self.current_disk = self.disks[name]
       return 'disk restored'
     else:
+      OFT = {0: 0}
       self.current_disk = Disk(name)
       return 'disk initialized'
 
@@ -147,8 +156,9 @@ class FileSystem(object):
     if not self.current_disk:
       raise FSError('No disk has been initialized!')
     else:
+      OFT = {}
       self.disks[name] = self.current_disk
-    return 'disk saved'
+      return 'disk saved'
 
 
 def main():
