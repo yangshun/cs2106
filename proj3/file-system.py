@@ -81,6 +81,19 @@ class FileSystem(object):
           return block_data[i*2+1]
     return -1
 
+  def remove_directory_entry(self, name):
+    if not self.current_disk:
+      raise FSError('Disk not initialized!')
+    num = convert_filename_to_int(name)
+    for block_num in range(7, 10):
+      block_data = self.current_disk.read_block(block_num)
+      for i in range(len(block_data)/2):
+        if block_data[i*2] == num:
+          block_data[i*2] = -1
+          block_data[i*2+1] = -1
+          self.current_disk.write_block(block_num, block_data)
+          return
+
   def find_empty_block(self):
     bitmap = self.current_disk.read_block(0)
     for i in range(NUM_BLOCKS_IN_DISK):
@@ -96,7 +109,7 @@ class FileSystem(object):
 
   def create_file(self, name):
     fd_index = self.retrieve_file(name)
-    if fd_index > 0:
+    if fd_index >= 0:
       raise FSError('File already exists!')
     else:
       descriptor_index = -1
@@ -128,12 +141,22 @@ class FileSystem(object):
 
       return name + ' created'
 
-  # def destroy_file(name):
-  #   if name in files:
-  #     files.remove(name)
-  #     return name + ' destroyed'
-  #   else:
-  #     raise FSError('File <' + name + '> does not exist!')
+  def destroy_file(self, name):
+    fd_index = self.retrieve_file(name)
+    if fd_index < 0:
+      raise FSError('File "' + name + '" does not exist!')
+    else:
+      block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+      index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+      block_data = self.current_disk.read_block(block_num)
+      bitmap = self.current_disk.read_block(0)
+      for i in range(NUM_DESCRIPTORS_IN_BLOCK):
+        if i > 0 and block_data[index+i] > -1:
+          bitmap[block_data[index+i]] = 0
+        block_data[index+i] = -1
+      self.current_disk.write_block(0, bitmap)
+      self.remove_directory_entry(name)
+      return name + ' destroyed'
 
   # def open_file(name):
   #   self.OFT[self.get_OFT_free_entry()] = (descriptor_index, 0)
@@ -176,7 +199,7 @@ def main():
 
   commands_mapping = {
     'cr': fs.create_file,
-    # 'de': destroy_file,
+    'de': fs.destroy_file,
     # 'op': open_file,
     # 'cl': close_file,
     # 'rd': read_file,
