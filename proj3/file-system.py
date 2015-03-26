@@ -46,10 +46,16 @@ class Disk(object):
       # Block 7-9 - directory
       self.blocks[0][i] = 1
 
-    for i in range(1, NUM_BLOCKS_IN_DISK):
+    for i in range(1, 10):
       block = []
       for j in range(NUM_BYTES_IN_BLOCK/NUM_BYTES_IN_INT):
         block.append(-1)
+      self.blocks.append(block)
+
+    for i in range(10, NUM_BLOCKS_IN_DISK):
+      block = []
+      for j in range(NUM_BYTES_IN_BLOCK):
+        block.append(None)
       self.blocks.append(block)
 
     # Slot 0 - Directory
@@ -191,6 +197,25 @@ class FileSystem(object):
       self.buffer = self.current_disk.read_block(disk_block_num)
 
       return name + ' opened ' + str(oft_index)
+
+  def close_file(self, name):
+    # Search directory to find file descriptor
+    fd_index = self.retrieve_file(name)
+    if fd_index < 0:
+      raise FSError('File "' + name + '" does not exist!')
+    else:
+      for key, value in self.OFT.items():
+        if value[0] == fd_index:
+          oft_index = key
+          break
+
+      # TODO: Write buffer to disk
+      # TODO: Update file length in descriptor
+
+      # Free OFT entry
+      del self.OFT[oft_index]
+
+      return oft_index + ' closed'
 
   def list_dir_files(self):
     file_names = []
