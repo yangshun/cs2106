@@ -143,6 +143,15 @@ class FileSystem(object):
   #   else:
   #     raise FSError('File <' + name + '> does not exist!')
 
+  def list_dir_files(self):
+    file_names = []
+    for block_num in range(7, 10):
+      block_data = self.current_disk.read_block(block_num)
+      for i in range(len(block_data)/2):
+        if block_data[i*2] != -1:
+          file_names.append(convert_int_to_filename(block_data[i*2]))
+    return ' '.join(file_names)
+
   def init_disk(self, name=''):
     if name in self.disks:
       self.current_disk = self.disks[name]
@@ -173,7 +182,7 @@ def main():
     # 'rd': read_file,
     # 'wr': write_file,
     # 'sk': seek_file,
-    # 'dr': list_dir_files,
+    'dr': fs.list_dir_files,
     'in': fs.init_disk,
     'sv': fs.save_disk
   }
