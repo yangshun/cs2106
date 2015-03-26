@@ -14,7 +14,7 @@ each directory entry: 2 integers
 file name: maximum 4 chars, no extension (1 int)
 descriptor index: 1 integer
 ldisk can be saved into a text file at any point with the sv command
-ldisk can be restored from a previously saved text file ising the in command
+ldisk can be restored from a previously saved text file using the in command
 a new empty ldisk is created if no saved file is given
 directory is opened automatically with in command (OFT index = 0) 
 OFT has 4 entries: directory plus up to 3 other open files
