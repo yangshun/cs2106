@@ -69,6 +69,7 @@ class FileSystem(object):
     self.disks = {}
     self.current_disk = None
     self.OFT = {}
+    self.buffer = None
 
   def retrieve_file(self, name):
     if not self.current_disk:
@@ -112,6 +113,7 @@ class FileSystem(object):
     if fd_index >= 0:
       raise FSError('File already exists!')
     else:
+      # Find a free file descriptor
       descriptor_index = -1
       for num in range(6):
         block_num = num + 1
@@ -126,6 +128,7 @@ class FileSystem(object):
         if descriptor_index != -1:
           break
 
+      # Find a free directory entry
       free_directory_found = False
       for block_num in range(7, 10):
         block_data = self.current_disk.read_block(block_num)
@@ -142,29 +145,52 @@ class FileSystem(object):
       return name + ' created'
 
   def destroy_file(self, name):
+    # Search directory to find file descriptor
     fd_index = self.retrieve_file(name)
     if fd_index < 0:
       raise FSError('File "' + name + '" does not exist!')
     else:
+      # Remove directory entry
+      self.remove_directory_entry(name)
+
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
       index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
       block_data = self.current_disk.read_block(block_num)
+      
+      # Update bit map
       bitmap = self.current_disk.read_block(0)
       for i in range(NUM_DESCRIPTORS_IN_BLOCK):
-        if i > 0 and block_data[index+i] > -1:
-          bitmap[block_data[index+i]] = 0
-        block_data[index+i] = -1
+        if i > 0 and block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i] > -1:
+          bitmap[block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i]] = 0
       self.current_disk.write_block(0, bitmap)
-      self.remove_directory_entry(name)
+
+      # Free file descriptor
+      for i in range(NUM_DESCRIPTORS_IN_BLOCK):
+        block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i] = -1
+      self.current_disk.write_block(block_num, block_data)
+
       return name + ' destroyed'
 
-  # def open_file(name):
-  #   self.OFT[self.get_OFT_free_entry()] = (descriptor_index, 0)
-  #   if name in files:
-  #     files.remove(name)
-  #     return name + ' destroyed'
-  #   else:
-  #     raise FSError('File <' + name + '> does not exist!')
+  def open_file(self, name):
+    # Search directory to find file descriptor
+    fd_index = self.retrieve_file(name)
+    if fd_index < 0:
+      raise FSError('File "' + name + '" does not exist!')
+    else:
+      # Allocate a free OFT entry
+      oft_index = self.get_OFT_free_entry()
+
+      # Fill in file descriptor index and current position
+      self.OFT[oft_index] = (fd_index, 0)
+
+      # Read block 0 of file into buffer
+      block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+      index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+      block_data = self.current_disk.read_block(block_num)
+      disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
+      self.buffer = self.current_disk.read_block(disk_block_num)
+
+      return name + ' opened ' + str(oft_index)
 
   def list_dir_files(self):
     file_names = []
@@ -176,11 +202,11 @@ class FileSystem(object):
     return ' '.join(file_names)
 
   def init_disk(self, name=''):
+    self.OFT = {0: 0}
     if name in self.disks:
       self.current_disk = self.disks[name]
       return 'disk restored'
     else:
-      OFT = {0: 0}
       self.current_disk = Disk(name)
       return 'disk initialized'
 
@@ -188,7 +214,7 @@ class FileSystem(object):
     if not self.current_disk:
       raise FSError('No disk has been initialized!')
     else:
-      OFT = {}
+      self.OFT = {}
       self.disks[name] = self.current_disk
       return 'disk saved'
 
@@ -200,7 +226,7 @@ def main():
   commands_mapping = {
     'cr': fs.create_file,
     'de': fs.destroy_file,
-    # 'op': open_file,
+    'op': fs.open_file,
     # 'cl': close_file,
     # 'rd': read_file,
     # 'wr': write_file,
