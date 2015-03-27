@@ -195,7 +195,7 @@ class FileSystem(object):
       oft_index = self.get_OFT_free_entry()
 
       # Fill in file descriptor index and current position
-      self.OFT[oft_index] = (fd_index, 0)
+      self.OFT[oft_index] = [fd_index, 0]
 
       # Read block 0 of file into buffer
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
@@ -218,9 +218,18 @@ class FileSystem(object):
     else:
       raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
     
-    del self.OFT[oft_index]
-
-    return oft_index + ' closed'
+  def write_file(self, oft_index, char, count):
+    oft_index = int(oft_index)
+    if oft_index in self.OFT:
+      fd_index, curr_pos = self.OFT[oft_index]
+      for i in range(curr_pos, curr_pos + count):
+        # TODO: Handle end of buffer
+        self.buffer[i] = char
+      curr_pos += count
+      self.OFT[oft_index][1] = curr_pos
+      return str(count) + ' bytes written'
+    else:
+      raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
 
   def list_dir_files(self):
     file_names = []
@@ -232,7 +241,7 @@ class FileSystem(object):
     return ' '.join(file_names)
 
   def init_disk(self, name=''):
-    self.OFT = {0: 0}
+    self.OFT = {0: [0, 0]}
     try:
       if name != '':
         with open(DISK_DIR + name, 'r') as f:
