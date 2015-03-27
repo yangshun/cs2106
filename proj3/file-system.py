@@ -217,9 +217,35 @@ class FileSystem(object):
       return str(oft_index) + ' closed'
     else:
       raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
+
+  def read_file(self, oft_index, count):
+    oft_index = int(oft_index)
+    count = int(count)
+
+    if oft_index in self.OFT:
+      printed_message = ''
+      # Copy 
+      fd_index, curr_pos = self.OFT[oft_index]
+
+      block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+      index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+      block_data = self.current_disk.read_block(block_num)
+      disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
+      self.buffer = self.current_disk.read_block(disk_block_num)
+
+      for i in range(curr_pos, curr_pos + count):
+        printed_message += self.buffer[i]
+      curr_pos += count
+
+      self.OFT[oft_index][1] = curr_pos
+      return printed_message
+    else:
+      raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
     
   def write_file(self, oft_index, char, count):
     oft_index = int(oft_index)
+    count = int(count)
+
     if oft_index in self.OFT:
       fd_index, curr_pos = self.OFT[oft_index]
       for i in range(curr_pos, curr_pos + count):
@@ -228,6 +254,29 @@ class FileSystem(object):
       curr_pos += count
       self.OFT[oft_index][1] = curr_pos
       return str(count) + ' bytes written'
+    else:
+      raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
+
+  def seek_file(self, oft_index, pos):
+    oft_index = int(oft_index)
+    pos = int(pos)
+
+    if oft_index in self.OFT:
+      curr_pos = self.OFT[oft_index][1]
+      current_block = curr_pos // NUM_BYTES_IN_BLOCK
+      seeked_block = pos // NUM_BYTES_IN_BLOCK
+
+      if current_block != seeked_block:
+        # Read block 0 of file into buffer
+        block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+        index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+        block_data = self.current_disk.read_block(block_num)
+        disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
+        self.buffer = self.current_disk.read_block(disk_block_num)
+
+      # Set the current position to the new position
+      self.OFT[oft_index][1] = pos
+      return 'position is ' + str(pos)
     else:
       raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
 
@@ -271,9 +320,9 @@ def main():
     'de': fs.destroy_file,
     'op': fs.open_file,
     'cl': fs.close_file,
-    # 'rd': read_file,
-    # 'wr': write_file,
-    # 'sk': seek_file,
+    'rd': fs.read_file,
+    'wr': fs.write_file,
+    'sk': fs.seek_file,
     'dr': fs.list_dir_files,
     'in': fs.init_disk,
     'sv': fs.save_disk
