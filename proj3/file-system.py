@@ -211,6 +211,13 @@ class FileSystem(object):
     # TODO: Update file length in descriptor
 
     # Free OFT entry
+    oft_index = int(oft_index)
+    if oft_index in self.OFT:
+      del self.OFT[int(oft_index)]
+      return str(oft_index) + ' closed'
+    else:
+      raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
+    
     del self.OFT[oft_index]
 
     return oft_index + ' closed'
