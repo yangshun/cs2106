@@ -1,6 +1,9 @@
 #!/bin/python
 
+import pickle
+
 DEBUG = True
+DISK_DIR = './disk/'
 NUM_BLOCKS_IN_DISK = 64
 NUM_BYTES_IN_BLOCK = 64
 NUM_BYTES_IN_INT = 4
@@ -32,37 +35,38 @@ class FSError(Exception):
     return repr(self.value)
 
 class Disk(object):
-  def __init__(self, name):
+  def __init__(self, name, blocks=[]):
     self.name = name
-    self.blocks = []
+    self.blocks = blocks
 
-    # Init bitmap
-    self.blocks.append([])
-    for i in range(NUM_BYTES_IN_BLOCK):
-      self.blocks[0].append(0)
-    for i in range(10):
-      # Block   0 - bitmap
-      # Block 1-6 - file descriptors
-      # Block 7-9 - directory
-      self.blocks[0][i] = 1
+    if blocks == []:
+      # Init bitmap
+      self.blocks.append([])
+      for i in range(NUM_BYTES_IN_BLOCK):
+        self.blocks[0].append(0)
+      for i in range(10):
+        # Block   0 - bitmap
+        # Block 1-6 - file descriptors
+        # Block 7-9 - directory
+        self.blocks[0][i] = 1
 
-    for i in range(1, 10):
-      block = []
-      for j in range(NUM_BYTES_IN_BLOCK/NUM_BYTES_IN_INT):
-        block.append(-1)
-      self.blocks.append(block)
+      for i in range(1, 10):
+        block = []
+        for j in range(NUM_BYTES_IN_BLOCK/NUM_BYTES_IN_INT):
+          block.append(-1)
+        self.blocks.append(block)
 
-    for i in range(10, NUM_BLOCKS_IN_DISK):
-      block = []
-      for j in range(NUM_BYTES_IN_BLOCK):
-        block.append(None)
-      self.blocks.append(block)
+      for i in range(10, NUM_BLOCKS_IN_DISK):
+        block = []
+        for j in range(NUM_BYTES_IN_BLOCK):
+          block.append(None)
+        self.blocks.append(block)
 
-    # Slot 0 - Directory
-    self.blocks[1][0] = 0
-    self.blocks[1][1] = 7
-    self.blocks[1][2] = 8
-    self.blocks[1][3] = 9
+      # Slot 0 - Directory
+      self.blocks[1][0] = 0
+      self.blocks[1][1] = 7
+      self.blocks[1][2] = 8
+      self.blocks[1][3] = 9
 
   def read_block(self, num):
     return self.blocks[num]
@@ -70,9 +74,13 @@ class Disk(object):
   def write_block(self, num, block):
     self.blocks[num] = block
 
+  def save_disk(self, name):
+    f = open(DISK_DIR + name, 'w+')
+    f.write(pickle.dumps(self.blocks))
+    f.close()
+
 class FileSystem(object):
   def __init__(self):
-    self.disks = {}
     self.current_disk = None
     self.OFT = {}
     self.buffer = None
@@ -228,10 +236,14 @@ class FileSystem(object):
 
   def init_disk(self, name=''):
     self.OFT = {0: 0}
-    if name in self.disks:
-      self.current_disk = self.disks[name]
-      return 'disk restored'
-    else:
+    try:
+      if name != '':
+        with open(DISK_DIR + name, 'r') as f:
+          self.current_disk = Disk(name, pickle.loads(f.read()))
+          return 'disk restored' 
+      else:
+        raise IOError
+    except IOError:
       self.current_disk = Disk(name)
       return 'disk initialized'
 
@@ -240,7 +252,7 @@ class FileSystem(object):
       raise FSError('No disk has been initialized!')
     else:
       self.OFT = {}
-      self.disks[name] = self.current_disk
+      self.current_disk.save_disk(name)
       return 'disk saved'
 
 
