@@ -82,8 +82,8 @@ class Disk(object):
 class FileSystem(object):
   def __init__(self):
     self.current_disk = None
+    # Dict of oft_index: [rw_buffer, curr_pos, fd_index]
     self.OFT = {}
-    self.buffer = None
 
   def retrieve_file(self, name):
     if not self.current_disk:
@@ -121,6 +121,11 @@ class FileSystem(object):
       if i not in self.OFT:
         return i
     raise FSError('No more free entries in OFT!')
+
+  def set_bitmap_value(self, index, value):
+    bitmap = self.current_disk.read_block(0)
+    bitmap[index] = value
+    self.current_disk.write_block(0, bitmap)
 
   def create_file(self, name):
     fd_index = self.retrieve_file(name)
@@ -172,11 +177,9 @@ class FileSystem(object):
       block_data = self.current_disk.read_block(block_num)
       
       # Update bit map
-      bitmap = self.current_disk.read_block(0)
       for i in range(NUM_DESCRIPTORS_IN_BLOCK):
         if i > 0 and block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i] > -1:
-          bitmap[block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i]] = 0
-      self.current_disk.write_block(0, bitmap)
+          self.set_bitmap_value(block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i], 0)
 
       # Free file descriptor
       for i in range(NUM_DESCRIPTORS_IN_BLOCK):
@@ -195,24 +198,43 @@ class FileSystem(object):
       oft_index = self.get_OFT_free_entry()
 
       # Fill in file descriptor index and current position
-      self.OFT[oft_index] = [fd_index, 0]
+      self.OFT[oft_index] = [None, 0, fd_index]
 
       # Read block 0 of file into buffer
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
       index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
       block_data = self.current_disk.read_block(block_num)
       disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
-      self.buffer = self.current_disk.read_block(disk_block_num)
+
+      # Allocate block
+      if disk_block_num == -1:
+        disk_block_num = self.find_empty_block()
+        block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1] = disk_block_num
+        self.current_disk.write_block(block_num, block_data)
+        self.set_bitmap_value(disk_block_num, 1)
+
+      self.OFT[oft_index][0] = self.current_disk.read_block(disk_block_num)
 
       return name + ' opened ' + str(oft_index)
 
   def close_file(self, oft_index):
     # TODO: Write buffer to disk
     # TODO: Update file length in descriptor
-
-    # Free OFT entry
     oft_index = int(oft_index)
     if oft_index in self.OFT:
+      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
+
+      # Write buffer to disk
+      disk_offset = curr_pos // NUM_BYTES_IN_BLOCK
+      block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+      index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+      block_data = self.current_disk.read_block(block_num)
+      disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+disk_offset]
+      self.current_disk.write_block(disk_block_num, rw_buffer)
+
+      # TODO: Update file length in descriptor
+
+      # Free OFT entry
       del self.OFT[int(oft_index)]
       return str(oft_index) + ' closed'
     else:
@@ -224,17 +246,16 @@ class FileSystem(object):
 
     if oft_index in self.OFT:
       printed_message = ''
-      # Copy 
-      fd_index, curr_pos = self.OFT[oft_index]
-
-      block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
-      index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
-      block_data = self.current_disk.read_block(block_num)
-      disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
-      self.buffer = self.current_disk.read_block(disk_block_num)
-
+      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
       for i in range(curr_pos, curr_pos + count):
-        printed_message += self.buffer[i]
+        disk_offset = i // NUM_BYTES_IN_BLOCK + 1
+        block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+        index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+        block_data = self.current_disk.read_block(block_num)
+        disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+disk_offset]
+        rw_buffer = self.current_disk.read_block(disk_block_num)
+        # TODO: Check that it does not exceed file length
+        printed_message += rw_buffer[i%NUM_BYTES_IN_BLOCK]
       curr_pos += count
 
       self.OFT[oft_index][1] = curr_pos
@@ -247,12 +268,32 @@ class FileSystem(object):
     count = int(count)
 
     if oft_index in self.OFT:
-      fd_index, curr_pos = self.OFT[oft_index]
+      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
+
+      curr_disk_offset = curr_pos // NUM_BYTES_IN_BLOCK + 1
       for i in range(curr_pos, curr_pos + count):
-        # TODO: Handle end of buffer
-        self.buffer[i] = char
+        # End of buffer reached
+        if (i // NUM_BYTES_IN_BLOCK + 1) != curr_disk_offset:
+          curr_disk_offset = i // NUM_BYTES_IN_BLOCK + 1
+          block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+          index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+          block_data = self.current_disk.read_block(block_num)
+          disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+curr_disk_offset]
+          # If block does not exist yet
+          if disk_block_num == -1:
+            # Allocate new block (search and update bitmap)
+            disk_block_num = self.find_empty_block()
+            self.set_bitmap_value(disk_block_num, 1)
+            # Update file descriptor with new block number
+            block_data[index*NUM_DESCRIPTORS_IN_BLOCK+curr_disk_offset] = disk_block_num
+            self.current_disk.write_block(block_num, block_data)
+
+          rw_buffer = self.current_disk.read_block(disk_block_num)
+        rw_buffer[i%NUM_BYTES_IN_BLOCK] = char
+
       curr_pos += count
       self.OFT[oft_index][1] = curr_pos
+      # print_blocks(self.current_disk.blocks)
       return str(count) + ' bytes written'
     else:
       raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
@@ -262,7 +303,7 @@ class FileSystem(object):
     pos = int(pos)
 
     if oft_index in self.OFT:
-      curr_pos = self.OFT[oft_index][1]
+      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
       current_block = curr_pos // NUM_BYTES_IN_BLOCK
       seeked_block = pos // NUM_BYTES_IN_BLOCK
 
@@ -272,7 +313,7 @@ class FileSystem(object):
         index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
         block_data = self.current_disk.read_block(block_num)
         disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
-        self.buffer = self.current_disk.read_block(disk_block_num)
+        self.OFT[oft_index][0] = self.current_disk.read_block(disk_block_num)
 
       # Set the current position to the new position
       self.OFT[oft_index][1] = pos
@@ -290,7 +331,7 @@ class FileSystem(object):
     return ' '.join(file_names)
 
   def init_disk(self, name=''):
-    self.OFT = {0: [0, 0]}
+    self.OFT = {0: [0, 0, 0]}
     try:
       if name != '':
         with open(DISK_DIR + name, 'r') as f:
