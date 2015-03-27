@@ -375,7 +375,7 @@ def main():
       if cmd:
         print commands_mapping[cmd[0]](*cmd[1:])
       else:
-        continue
+        print ''
     except FSError as e:
       print e.value if DEBUG else 'error'
     except EOFError:
