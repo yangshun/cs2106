@@ -2,13 +2,14 @@
 
 import pickle
 
-DEBUG = True
+DEBUG = False
 DISK_DIR = './disk/'
 NUM_BLOCKS_IN_DISK = 64
 NUM_BYTES_IN_BLOCK = 64
 NUM_BYTES_IN_INT = 4
 NUM_DESCRIPTORS_IN_BLOCK = 4
 NUM_BITS_IN_BYTE = 8
+NUM_ENTRIES_IN_OFT = 4
 
 def convert_filename_to_int(name):
   result = 0
@@ -25,7 +26,7 @@ def convert_int_to_filename(num):
   return filename
 
 def print_blocks(blocks):
-  for i in range(NUM_BLOCKS_IN_DISK):
+  for i in range(18):
     print i, ':', blocks[i]
 
 class FSError(Exception):
@@ -117,7 +118,7 @@ class FileSystem(object):
     return -1
 
   def get_OFT_free_entry(self):
-    for i in range(3):
+    for i in range(1, NUM_ENTRIES_IN_OFT):
       if i not in self.OFT:
         return i
     raise FSError('No more free entries in OFT!')
@@ -169,6 +170,11 @@ class FileSystem(object):
     if fd_index < 0:
       raise FSError('File "' + name + '" does not exist!')
     else:
+      # Remove from OFT table if file is open
+      for i in range(1, NUM_ENTRIES_IN_OFT):
+        if i in self.OFT and self.OFT[i][2] == fd_index:
+          self.close_file(i)
+
       # Remove directory entry
       self.remove_directory_entry(name)
 
@@ -264,15 +270,16 @@ class FileSystem(object):
       file_length = block_data[index*NUM_DESCRIPTORS_IN_BLOCK]
       for i in range(curr_pos, curr_pos + count):
         # Reached end of file
+        curr_pos = i
         if file_length == i:
-          return printed_message
+          break
 
         disk_offset = i // NUM_BYTES_IN_BLOCK + 1
         disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+disk_offset]
         rw_buffer = self.current_disk.read_block(disk_block_num)
         printed_message += rw_buffer[i%NUM_BYTES_IN_BLOCK]
-      curr_pos += count
-
+      
+      self.OFT[oft_index][0] = rw_buffer
       self.OFT[oft_index][1] = curr_pos
       return printed_message
     else:
@@ -284,40 +291,53 @@ class FileSystem(object):
 
     if oft_index in self.OFT:
       rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
-
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
       index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
       block_data = self.current_disk.read_block(block_num)
       curr_disk_offset = curr_pos // NUM_BYTES_IN_BLOCK + 1
-      for i in range(curr_pos, curr_pos + count):
-        # End of buffer reached
-        if (i // NUM_BYTES_IN_BLOCK + 1) != curr_disk_offset:
-          curr_disk_offset = i // NUM_BYTES_IN_BLOCK + 1
-          disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+curr_disk_offset]
-          # If block does not exist yet
-          if disk_block_num == -1:
-            # Allocate new block (search and update bitmap)
-            disk_block_num = self.find_empty_block()
-            self.set_bitmap_value(disk_block_num, 1)
-            # Update file descriptor with new block number
-            block_data[index*NUM_DESCRIPTORS_IN_BLOCK+curr_disk_offset] = disk_block_num
-            self.current_disk.write_block(block_num, block_data)
 
-          rw_buffer = self.current_disk.read_block(disk_block_num)
+      for i in range(curr_pos, curr_pos + count):
+        # Exceed 3 disk blocks
+        if i > 3 * NUM_BYTES_IN_BLOCK - 1:
+          break
+
         rw_buffer[i%NUM_BYTES_IN_BLOCK] = char
 
-      curr_pos += count
-      self.OFT[oft_index][1] = curr_pos
+        # End of buffer reached
+        if ((i+1) % NUM_BYTES_IN_BLOCK) == 0 and i != 3 * NUM_BYTES_IN_BLOCK - 1:
+          self.current_disk.write_block(block_num, rw_buffer)
+          prev_disk_offset = curr_disk_offset
+          curr_disk_offset = (i+1) // NUM_BYTES_IN_BLOCK + 1
+          
+          # Write the buffer to disk block
+          prev_disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+prev_disk_offset]
+          self.current_disk.write_block(prev_disk_block_num, rw_buffer)
+          next_disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+curr_disk_offset]
 
+          # If block does not exist yet
+          if next_disk_block_num == -1:
+            # Allocate new block (search and update bitmap)
+            next_disk_block_num = self.find_empty_block()
+            self.set_bitmap_value(next_disk_block_num, 1)
+            # Update file descriptor with new block number
+            block_data[index*NUM_DESCRIPTORS_IN_BLOCK+curr_disk_offset] = next_disk_block_num
+            self.current_disk.write_block(block_num, block_data)
+
+          rw_buffer = self.current_disk.read_block(next_disk_block_num)
+
+      curr_pos += count
+      self.OFT[oft_index][0] = rw_buffer
+      self.OFT[oft_index][1] = curr_pos
       # Update file length in descriptor
       file_length = 0
       for i in range(1, NUM_DESCRIPTORS_IN_BLOCK):
         tmp_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+i]
-        for j in self.current_disk.read_block(tmp_block_num):
-          if j != None:
-            file_length += 1
-          else:
-            break
+        if tmp_block_num != -1:
+          for j in self.current_disk.read_block(tmp_block_num):
+            if j != None:
+              file_length += 1
+            else:
+              break
       block_data[index*NUM_DESCRIPTORS_IN_BLOCK] = file_length
       self.current_disk.write_block(block_num, block_data)
 
