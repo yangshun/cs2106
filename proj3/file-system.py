@@ -359,7 +359,7 @@ class FileSystem(object):
         block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
         index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
         block_data = self.current_disk.read_block(block_num)
-        disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1]
+        disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1+seeked_block]
         self.OFT[oft_index][0] = self.current_disk.read_block(disk_block_num)
 
       # TODO: Check that new position not beyond file length
