@@ -422,7 +422,10 @@ def main():
     try:
       cmd = [p.strip() for p in raw_input().split(' ') if p.strip() != '']
       if cmd:
-        print commands_mapping[cmd[0]](*cmd[1:])
+        if cmd[0] in commands_mapping:
+          print commands_mapping[cmd[0]](*cmd[1:])
+        else:
+          raise FSError('Invalid command!')
       else:
         print ''
     except FSError as e:
