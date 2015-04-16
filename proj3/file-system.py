@@ -389,7 +389,7 @@ class FileSystem(object):
       else:
         raise IOError
     except IOError:
-      self.current_disk = Disk(name)
+      self.current_disk = Disk(name, [])
       return 'disk initialized'
 
   def save_disk(self, name):
