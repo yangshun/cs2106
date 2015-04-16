@@ -83,6 +83,7 @@ class Disk(object):
 class FileSystem(object):
   def __init__(self):
     self.current_disk = None
+    self.open_files = set()
     # Dict of oft_index: [rw_buffer, curr_pos, fd_index]
     self.OFT = {}
 
@@ -202,12 +203,15 @@ class FileSystem(object):
     fd_index = self.retrieve_file(name)
     if fd_index < 0:
       raise FSError('File "' + name + '" does not exist!')
+    elif name in self.open_files:
+      raise FSError('File "' + name + '" is already opened!')
     else:
+
       # Allocate a free OFT entry
       oft_index = self.get_OFT_free_entry()
 
       # Fill in file descriptor index and current position
-      self.OFT[oft_index] = [None, 0, fd_index]
+      self.OFT[oft_index] = [None, 0, fd_index, name]
 
       # Read block 0 of file into buffer
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
@@ -223,13 +227,13 @@ class FileSystem(object):
         self.set_bitmap_value(disk_block_num, 1)
 
       self.OFT[oft_index][0] = self.current_disk.read_block(disk_block_num)
-
+      self.open_files.add(name)
       return name + ' opened ' + str(oft_index)
 
   def close_file(self, oft_index):
     oft_index = int(oft_index)
     if oft_index in self.OFT:
-      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
+      rw_buffer, curr_pos, fd_index, name = self.OFT[oft_index]
 
       # Write buffer to disk
       disk_offset = curr_pos // NUM_BYTES_IN_BLOCK + 1
@@ -253,6 +257,7 @@ class FileSystem(object):
 
       # Free OFT entry
       del self.OFT[int(oft_index)]
+      self.open_files.discard(name)
       return str(oft_index) + ' closed'
     else:
       raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
@@ -263,7 +268,7 @@ class FileSystem(object):
 
     if oft_index in self.OFT:
       printed_message = ''
-      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
+      rw_buffer, curr_pos, fd_index, name = self.OFT[oft_index]
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
       index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
       block_data = self.current_disk.read_block(block_num)
@@ -290,7 +295,7 @@ class FileSystem(object):
     count = int(count)
 
     if oft_index in self.OFT:
-      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
+      rw_buffer, curr_pos, fd_index, name = self.OFT[oft_index]
       block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
       index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
       block_data = self.current_disk.read_block(block_num)
@@ -350,7 +355,7 @@ class FileSystem(object):
     pos = int(pos)
 
     if oft_index in self.OFT:
-      rw_buffer, curr_pos, fd_index = self.OFT[oft_index]
+      rw_buffer, curr_pos, fd_index, name = self.OFT[oft_index]
       current_block = curr_pos // NUM_BYTES_IN_BLOCK
       seeked_block = pos // NUM_BYTES_IN_BLOCK
 
@@ -424,6 +429,7 @@ def main():
       if cmd:
         if cmd[0] in commands_mapping:
           print commands_mapping[cmd[0]](*cmd[1:])
+          # print_blocks(fs.current_disk.blocks)
         else:
           raise FSError('Invalid command!')
       else:
