@@ -301,12 +301,14 @@ class FileSystem(object):
       block_data = self.current_disk.read_block(block_num)
       curr_disk_offset = curr_pos // NUM_BYTES_IN_BLOCK + 1
 
+      actual_bytes_written = 0
       for i in range(curr_pos, curr_pos + count):
         # Exceed 3 disk blocks
         if i > 3 * NUM_BYTES_IN_BLOCK - 1:
           break
 
         rw_buffer[i%NUM_BYTES_IN_BLOCK] = char
+        actual_bytes_written += 1;
 
         # End of buffer reached
         if ((i+1) % NUM_BYTES_IN_BLOCK) == 0 and i != 3 * NUM_BYTES_IN_BLOCK - 1:
@@ -330,7 +332,7 @@ class FileSystem(object):
 
           rw_buffer = self.current_disk.read_block(next_disk_block_num)
 
-      curr_pos += count
+      curr_pos += actual_bytes_written
       self.OFT[oft_index][0] = rw_buffer
       self.OFT[oft_index][1] = curr_pos
       # Update file length in descriptor
@@ -346,7 +348,7 @@ class FileSystem(object):
       block_data[index*NUM_DESCRIPTORS_IN_BLOCK] = file_length
       self.current_disk.write_block(block_num, block_data)
 
-      return str(count) + ' bytes written'
+      return str(actual_bytes_written) + ' bytes written'
     else:
       raise FSError('Index "' + str(oft_index) + '" does not exist in OFT!')
 
@@ -356,6 +358,15 @@ class FileSystem(object):
 
     if oft_index in self.OFT:
       rw_buffer, curr_pos, fd_index, name = self.OFT[oft_index]
+      block_num = fd_index // NUM_DESCRIPTORS_IN_BLOCK + 1
+      index = fd_index % NUM_DESCRIPTORS_IN_BLOCK
+      block_data = self.current_disk.read_block(block_num)
+      file_length = block_data[index*NUM_DESCRIPTORS_IN_BLOCK]
+
+      # Set seeked position to file length if exceed file length
+      if pos > file_length:
+        pos = file_length
+
       current_block = curr_pos // NUM_BYTES_IN_BLOCK
       seeked_block = pos // NUM_BYTES_IN_BLOCK
 
@@ -366,8 +377,6 @@ class FileSystem(object):
         block_data = self.current_disk.read_block(block_num)
         disk_block_num = block_data[index*NUM_DESCRIPTORS_IN_BLOCK+1+seeked_block]
         self.OFT[oft_index][0] = self.current_disk.read_block(disk_block_num)
-
-      # TODO: Check that new position not beyond file length
 
       # Set the current position to the new position
       self.OFT[oft_index][1] = pos
