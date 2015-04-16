@@ -440,7 +440,6 @@ def main():
       if cmd:
         if cmd[0] in commands_mapping:
           print commands_mapping[cmd[0]](*cmd[1:])
-          # print_blocks(fs.current_disk.blocks)
         else:
           raise FSError('Invalid command!')
       else:
