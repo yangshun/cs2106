@@ -1,0 +1,116 @@
+in 
+cr abc
+op abc
+cl 1
+de abc
+
+in 
+cr abc
+op abc
+cr xx
+cr p
+op xx
+de abc
+de p
+dr 
+
+in 
+cr abc
+op abc
+cr xx
+cr p
+op xx
+wr 1 x 2
+wr 1 y 64
+wr 2 z 192
+sk 1 0
+rd 1 5
+rd 1 5
+op p
+cl 1
+op abc
+rd 1 5
+sk 1 64
+rd 1 5
+sk 2 191
+rd 2 5
+sk 2 64
+wr 2 w 3
+sk 2 62
+rd 2 7
+dr
+sv disk.txt
+in disk.txt
+op abc
+op xx
+sk 1 0
+rd 1 5
+rd 1 5
+op p
+sk 1 64
+rd 1 5
+sk 2 62
+rd 2 7
+dr
+
+in 
+cr abc
+cr xx
+cr abc
+
+in
+cr abc
+cr xx
+de cba
+op cba
+op abc
+op abc
+cl 3
+
+in 
+cr abc
+op abc
+wr 1 x 200
+rd 2 10
+
+in 
+cr abc
+op abc
+wr 1 x 100
+sk 1 0
+sk 1 200
+
+in
+cr a
+op a
+cr b
+op b
+cr c
+op c
+cr d
+op d
+
+in 
+cr abc
+op abc
+cr xx
+cr p
+open xx
+wr 1 x 2
+wr 1 y 64
+wr 2 z 192
+sk 1 0
+rd 1 5
+rd 1 5
+op p
+cl 1
+op abc
+rd 1 5
+sk 1 64
+rd 1 5
+sk 2 64
+wr 2 w 3
+sk 2 62
+rd 2 7
+dr
+
