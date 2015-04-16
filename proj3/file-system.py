@@ -385,7 +385,8 @@ class FileSystem(object):
     return ' '.join(file_names)
 
   def init_disk(self, name=''):
-    self.OFT = {0: [0, 0, 0]}
+    self.OFT = {0: [0, 0, 0, None]}
+    self.open_files = set()
     try:
       if name != '':
         with open(DISK_DIR + name, 'r') as f:
@@ -402,6 +403,7 @@ class FileSystem(object):
       raise FSError('No disk has been initialized!')
     else:
       self.OFT = {}
+      self.open_files = set()
       self.current_disk.save_disk(name)
       return 'disk saved'
 
